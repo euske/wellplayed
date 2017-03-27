@@ -19,6 +19,17 @@ addInitHook(() => {
 });
 
 
+//  Bullet
+//
+class Bullet extends Projectile {
+    constructor(pos: Vec2, bounds: Rect) {
+	super(pos);
+	this.sprite.imgsrc = new RectImageSource('white', bounds)
+	this.collider = bounds;
+    }
+}
+
+
 //  Player
 //
 class Player extends Entity {
@@ -38,9 +49,23 @@ class Player extends Entity {
 	super.update();
 	this.moveIfPossible(this.usermove);
     }
+
+    fire() {
+	var bullet = new Bullet(this.pos, new Rect(-1, -4, 2, 8));
+	bullet.movement = new Vec2(0, -8);
+	bullet.frame = this.scene.screen;
+	this.scene.add(bullet);
+    }
     
     setMove(v: Vec2) {
 	this.usermove = v.scale(4);
+    }
+    
+    getFencesFor(range: Rect, v: Vec2, context: string): Rect[] {
+	return [this.scene.screen];
+    }
+
+    collidedWith(entity: Entity) {
     }
 }
 
@@ -54,6 +79,7 @@ class Game extends GameScene {
     stars: StarImageSource;
     scoreBox: TextBox;
     score: number;
+    firing: boolean;
 
     curTime: number;
     baseTime: number;
@@ -84,6 +110,16 @@ class Game extends GameScene {
 	this.toneTime = -999999;
     }
 
+    onButtonPressed(keysym: KeySym) {
+	this.firing = true;
+    }
+    onButtonReleased(keysym: KeySym) {
+	this.firing = false;
+    }
+    onDirChanged(v: Vec2) {
+	this.player.setMove(v);
+    }
+
     update() {
 	super.update();
 	this.stars.move(new Vec2(0, 2));
@@ -99,23 +135,22 @@ class Game extends GameScene {
 		this.curBase.currentTime = MP3_GAP;
 		this.curBase.play();
 	    }
-	    if (this.toneTime + TONE_LEN <= dt) {
-		this.toneTime = Math.floor(dt/TONE_LEN) * TONE_LEN;
-		this.curTone.pause();
-		if (this.curTone !== null) {
-		    let r = this.player.pos.x/this.screen.width;
-		    let i = ((Math.random() < r)? rnd(10) :
-			     clamp(0, this.curToneIndex+rnd(3)-1, 9));
-		    this.curTone.currentTime = (TONE_LEN*4*i)/1000 + MP3_GAP;
-		    this.curTone.play();
-		    this.curToneIndex = i;
+	    if (this.curTone !== null) {
+		if (this.toneTime + TONE_LEN <= dt) {
+		    this.toneTime = Math.floor(dt/TONE_LEN) * TONE_LEN;
+		    this.curTone.pause();
+		    if (this.firing) {
+			let r = this.player.pos.x/this.screen.width;
+			let i = ((Math.random() < r)? rnd(10) :
+				 clamp(0, this.curToneIndex+rnd(3)-1, 9));
+			this.curTone.currentTime = (TONE_LEN*4*i)/1000 + MP3_GAP;
+			this.curTone.play();
+			this.curToneIndex = i;
+			this.player.fire();
+		    }
 		}
 	    }
 	}
-    }
-
-    onDirChanged(v: Vec2) {
-	this.player.setMove(v);
     }
 
     render(ctx: CanvasRenderingContext2D, bx: number, by: number) {
