@@ -7,6 +7,7 @@
 
 ///  game.ts
 ///
+const TICK_LEN = 500/3;
 
 
 //  Initialize the resources.
@@ -111,56 +112,43 @@ class Changer extends Projectile {
 }
 
 
-//  Game
+//  Player2
 //
-const TONE_LEN = 500/3;
-class Game extends GameScene {
-
-    player: Player;
-    stars: StarImageSource;
-    scoreBox: TextBox;
-    score: number;
-    firing: boolean;
+class Player2 {
 
     curTime: number;
     baseTime: number;
     toneTime: number;
     
     baseDuration: number;
-    toneIndex: number;
     curBase: HTMLAudioElement;
-    curTone: HTMLAudioElement;
     nextBase: HTMLAudioElement;
-    nextTone: HTMLAudioElement;
     
-    changeProb: number;
+    toneDuration: number;
+    curTone: HTMLAudioElement;
+    nextTone: HTMLAudioElement;
+    playing: number;
 
-    init() {
-	super.init();
-	this.scoreBox = new TextBox(this.screen.inflate(-8,-8), FONT);
-	this.player = new Player(this, this.screen.center());
-	this.add(this.player);
-	this.stars = new StarImageSource(this.screen, 100);
-	this.layer.addSprite(new FixedSprite(new Vec2(), this.stars));
-	this.score = 0;
-	this.updateScore();
+    baseChanged: Signal;
+    toneChanged: Signal;
 
-	this.baseDuration = TONE_LEN*16;
-	this.toneIndex = 0;
+    constructor() {
+	this.baseDuration = TICK_LEN*32;
+	this.toneDuration = TICK_LEN*4;
 	this.curBase = this.nextBase = SOUNDS['base0'];
 	this.curTone = this.nextTone = null;
-	this.resetTimer();
-	
-	this.changeProb = 0;
+	this.baseChanged = new Signal(this);
+	this.toneChanged = new Signal(this);
+	this.reset();
     }
 
-    resetTimer() {
+    reset() {
 	this.curTime = 0;
 	this.baseTime = -999999;
 	this.toneTime = -999999;
     }
     
-    onBlur() {
+    suspend() {
 	if (this.curBase !== null) {
 	    this.curBase.pause();
 	}
@@ -169,26 +157,19 @@ class Game extends GameScene {
 	}
     }
 
-    onFocus() {
-	this.resetTimer();
+    resume() {
+	this.reset();
 	if (this.curBase !== null) {
 	    this.curBase.play();
 	}
     }
 
-    onButtonPressed(keysym: KeySym) {
-	this.firing = true;
+    setTune(baseSound: HTMLAudioElement, toneSound: HTMLAudioElement) {
+	this.nextBase = baseSound;
+	this.nextTone = toneSound;
     }
-    onButtonReleased(keysym: KeySym) {
-	this.firing = false;
-    }
-    onDirChanged(v: Vec2) {
-	this.player.setMove(v);
-    }
-
+    
     update() {
-	super.update();
-	this.stars.move(new Vec2(0, 2));
 	let t = Date.now();
 	if (this.curTime == 0) {
 	    this.curTime = t;
@@ -204,11 +185,12 @@ class Game extends GameScene {
 	    if (this.curBase !== null) {
 		this.curBase.currentTime = MP3_GAP;
 		this.curBase.play();
+		this.baseChanged.fire();
 	    }
 	    baseChanged = true;
 	}
-	if (this.toneTime + TONE_LEN <= dt) {
-	    this.toneTime = Math.floor(dt/TONE_LEN) * TONE_LEN;
+	if (this.toneTime + TICK_LEN <= dt) {
+	    this.toneTime = Math.floor(dt/TICK_LEN) * TICK_LEN;
 	    if (this.curTone !== null) {
 		this.curTone.pause();
 	    }
@@ -216,21 +198,80 @@ class Game extends GameScene {
 		this.curTone = this.nextTone;
 		this.nextTone = null;
 	    }
-	    if (this.curTone !== null && this.firing) {
-		let r = this.player.pos.x/this.screen.width;
-		let i = ((Math.random() < r)? rnd(10) :
-			 clamp(0, this.toneIndex+rnd(3)-1, 9));
-		this.curTone.currentTime = (TONE_LEN*4*i)/1000 + MP3_GAP;
+	    if (this.curTone !== null && 0 <= this.playing) {
+		this.curTone.currentTime = (this.toneDuration*this.playing)/1000 + MP3_GAP;
 		this.curTone.play();
-		this.toneIndex = i;
-		this.player.fire();
+		this.toneChanged.fire(this.playing);
+		this.playing = -1;
 	    }
 	}
+    }
+}
+
+
+//  Game
+//
+class Game extends GameScene {
+
+    player: Player;
+    player2: Player2;
+    stars: StarImageSource;
+    scoreBox: TextBox;
+    score: number;
+    firing: boolean;
+    
+    changeProb: number;
+    toneIndex: number;
+
+    init() {
+	super.init();
+	this.scoreBox = new TextBox(this.screen.inflate(-8,-8), FONT);
+	this.player = new Player(this, this.screen.center());
+	this.add(this.player);
+	this.stars = new StarImageSource(this.screen, 100);
+	this.layer.addSprite(new FixedSprite(new Vec2(), this.stars));
+	this.score = 0;
+	this.updateScore();
+
+	this.player2 = new Player2();
+	this.player2.toneChanged.subscribe(
+	    (index: number) => { this.toneIndex = index; }
+	);
+	this.changeProb = 0;
+	this.toneIndex = 0;
+    }
+    
+    onBlur() {
+	this.player2.suspend();
+    }
+    onFocus() {
+	this.player2.resume();
+    }
+
+    onButtonPressed(keysym: KeySym) {
+	this.firing = true;
+    }
+    onButtonReleased(keysym: KeySym) {
+	this.firing = false;
+    }
+    onDirChanged(v: Vec2) {
+	this.player.setMove(v);
+    }
+
+    update() {
+	super.update();
+	this.stars.move(new Vec2(0, 2));
+	this.player2.update();
 
 	this.changeProb += Math.random()*.05;
 	if (1.0 <= this.changeProb) {
 	    this.changeProb -= 1.0;
 	    this.add(new Changer(this.screen, 1+rnd(3)));
+	}
+	if (this.firing) {
+	    let r = this.player.pos.x/this.screen.width;
+	    this.player2.playing =
+		((Math.random() < r)? rnd(10) : clamp(0, this.toneIndex+rnd(3)-1, 9));
 	}
     }
 
@@ -249,16 +290,16 @@ class Game extends GameScene {
     changeBase(pattern: number) {
 	switch (pattern) {
 	case 1:
-	    this.nextBase = SOUNDS['base1'];
-	    this.nextTone = SOUNDS['tone1'];
+	    this.player2.setTune(SOUNDS['base1'], SOUNDS['tone1']);
 	    break;
 	case 2:
-	    this.nextBase = SOUNDS['base2'];
-	    this.nextTone = SOUNDS['tone2'];
+	    this.player2.setTune(SOUNDS['base2'], SOUNDS['tone2']);
 	    break;
 	case 3:
-	    this.nextBase = SOUNDS['base3'];
-	    this.nextTone = SOUNDS['tone3'];
+	    this.player2.setTune(SOUNDS['base3'], SOUNDS['tone3']);
+	    break;
+	case 4:
+	    this.player2.setTune(SOUNDS['base4'], SOUNDS['tone4']);
 	    break;
 	}
     }
