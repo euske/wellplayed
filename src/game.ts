@@ -20,6 +20,19 @@ addInitHook(() => {
 });
 
 
+function triangle(cycle: number, t: number)
+{
+    t = fmod(t, cycle);
+    if (t < cycle*0.25) {
+	return t;
+    } else if (t < cycle*0.75) {
+	return cycle*0.50-t;
+    } else {
+	return t-cycle;
+    }
+}
+
+
 //  Bullet
 //
 class Bullet extends Projectile {
@@ -56,6 +69,8 @@ class Enemy extends Entity {
 	this.frame = frame;
 	this.pattern = pattern;
 	this.movement = movement;
+	this.sprite.imgsrc = SPRITES.get(1, 0);
+	this.collider = this.sprite.getBounds(new Vec2());
     }
 
     update() {
@@ -122,15 +137,27 @@ class Spawner extends Task {
 
     scene: Game;
     pattern: number;
+    counter = 0;
     
     constructor(scene: Game, pattern: number) {
 	super();
 	this.scene = scene;
 	this.pattern = pattern;
+	this.lifetime = 2.0;
     }
 
     update() {
-	
+	switch (this.pattern) {
+	case 1:
+	    if (this.counter % 8 == 0) {
+		var frame = this.scene.screen;
+		var y = frame.y + triangle(10, this.counter/8)*10;
+		var pos = new Vec2(frame.x, y);
+		this.scene.add(new Enemy(pos, frame, 2, new Vec2(+4, 0)));
+	    }
+	    break;
+	}
+	this.counter++;
     }
 }
 
@@ -392,24 +419,6 @@ class Game extends GameScene {
     bkgndColor: string;
     bkgndTimer: number;
 
-    init() {
-	super.init();
-	this.scoreBox = new TextBox(this.screen.inflate(-8,-8), FONT);
-	this.player = new Player(this, this.screen.center());
-	this.add(this.player);
-	this.stars = new StarImageSource(this.screen, 100);
-	this.layer.addSprite(new FixedSprite(new Vec2(), this.stars));
-	this.score = 0;
-	this.updateScore();
-
-	this.player2 = new Player2();
-	this.changeProb = 0;
-	this.keyIndex = 0;
-	this.pattern = 0;
-	this.bkgndColor = 'rgb(0,0,0)';
-	this.bkgndTimer = 0;
-    }
-    
     onBlur() {
 	this.player2.suspend();
     }
@@ -427,26 +436,26 @@ class Game extends GameScene {
 	this.player.setMove(v);
     }
 
-    setPattern(pattern: number) {
-	this.player2.setNextPattern(pattern);
-	this.pattern = pattern;
-	switch (pattern) {
-	case 1:
-	    this.bkgndColor = 'rgb(128,0,0)';
-	    break;
-	case 2:
-	    this.bkgndColor = 'rgb(89,0,128)';
-	    break;
-	case 3:
-	    this.bkgndColor = 'rgb(0,128,72)';
-	    break;
-	case 4:
-	    this.bkgndColor = 'rgb(128,108,0)';
-	    break;
-	}
-	this.bkgndTimer = 10;
-    }
+    init() {
+	super.init();
+	this.scoreBox = new TextBox(this.screen.inflate(-8,-8), FONT);
+	this.player = new Player(this, this.screen.center());
+	this.add(this.player);
+	this.stars = new StarImageSource(this.screen, 100);
+	this.layer.addSprite(new FixedSprite(new Vec2(), this.stars));
+	this.score = 0;
+	this.updateScore();
 
+	this.player2 = new Player2();
+	this.changeProb = 0;
+	this.keyIndex = 0;
+	this.pattern = 0;
+	this.bkgndColor = 'rgb(0,0,0)';
+	this.bkgndTimer = 0;
+
+	this.add(new Spawner(this, 1));
+    }
+    
     update() {
 	super.update();
 	this.stars.move(new Vec2(0, 2));
@@ -480,5 +489,25 @@ class Game extends GameScene {
     updateScore() {
 	this.scoreBox.clear();
 	this.scoreBox.putText(['SCORE: '+this.score]);
+    }
+    
+    setPattern(pattern: number) {
+	this.player2.setNextPattern(pattern);
+	this.pattern = pattern;
+	switch (pattern) {
+	case 1:
+	    this.bkgndColor = 'rgb(128,0,0)';
+	    break;
+	case 2:
+	    this.bkgndColor = 'rgb(89,0,128)';
+	    break;
+	case 3:
+	    this.bkgndColor = 'rgb(0,128,72)';
+	    break;
+	case 4:
+	    this.bkgndColor = 'rgb(128,108,0)';
+	    break;
+	}
+	this.bkgndTimer = 10;
     }
 }
