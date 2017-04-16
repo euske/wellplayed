@@ -55,17 +55,55 @@ class Explosion extends Entity {
 }
 
 
+//  Spawner
+//
+class Spawner extends Task {
+
+    scene: Game;
+    pattern: number;
+    counter = 0;
+    
+    constructor(scene: Game, pattern: number) {
+	super();
+	this.scene = scene;
+	this.pattern = pattern;
+	this.lifetime = 2.0;
+	switch (this.pattern) {
+	case 1:
+	    break;
+	}
+    }
+
+    update() {
+	switch (this.pattern) {
+	case 1:
+	    if (this.counter % 8 == 0) {
+		var frame = this.scene.screen;
+		var y = frame.y + triangle(200, this.counter)+20;
+		var pos = new Vec2(frame.x, y);
+		this.scene.add(new Enemy(this, pos, frame, 2, new Vec2(+4, 0)));
+	    }
+	    break;
+	}
+	this.counter++;
+    }
+}
+
+
 //  Enemy
 //
 class Enemy extends Entity {
-    
+
+    spawner: Spawner;
     frame: Rect;
     pattern: number;
     movement: Vec2;
     turned = false;
 
-    constructor(pos: Vec2, frame: Rect, pattern: number, movement: Vec2=null) {
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect,
+		pattern: number, movement: Vec2=null) {
 	super(pos);
+	this.spawner = spawner;
 	this.frame = frame;
 	this.pattern = pattern;
 	this.movement = movement;
@@ -126,38 +164,8 @@ class Enemy extends Entity {
 	if (entity instanceof Bullet) {
 	    this.stop();
 	    this.chain(new Explosion(this.pos));
+	    this.spawner.scene.setKey(this);
 	}
-    }
-}
-
-
-//  Spawner
-//
-class Spawner extends Task {
-
-    scene: Game;
-    pattern: number;
-    counter = 0;
-    
-    constructor(scene: Game, pattern: number) {
-	super();
-	this.scene = scene;
-	this.pattern = pattern;
-	this.lifetime = 2.0;
-    }
-
-    update() {
-	switch (this.pattern) {
-	case 1:
-	    if (this.counter % 8 == 0) {
-		var frame = this.scene.screen;
-		var y = frame.y + triangle(10, this.counter/8)*10;
-		var pos = new Vec2(frame.x, y);
-		this.scene.add(new Enemy(pos, frame, 2, new Vec2(+4, 0)));
-	    }
-	    break;
-	}
-	this.counter++;
     }
 }
 
@@ -391,6 +399,7 @@ class Player2 {
 	    }
 	    if (this.keyFunc !== null) {
 		let key = this.keyFunc(this.keyCount++);
+		this.keyFunc = null;
 		if (this.curTone !== null && 0 <= key) {
 		    this.curTone.currentTime = (this.toneDuration*key)/1000 + MP3_GAP;
 		    this.curTone.play();
@@ -414,8 +423,9 @@ class Game extends GameScene {
     score: number;
 
     changeProb: number;
-    keyIndex: number;
-    pattern: number;
+    spawnerProb: number;
+
+    basePattern: number;
     bkgndColor: string;
     bkgndTimer: number;
 
@@ -427,7 +437,7 @@ class Game extends GameScene {
     }
 
     onButtonPressed(keysym: KeySym) {
-	this.player.setFire(this.pattern);
+	this.player.setFire(this.basePattern);
     }
     onButtonReleased(keysym: KeySym) {
 	this.player.setFire(0);
@@ -441,19 +451,17 @@ class Game extends GameScene {
 	this.scoreBox = new TextBox(this.screen.inflate(-8,-8), FONT);
 	this.player = new Player(this, this.screen.center());
 	this.add(this.player);
+	this.player2 = new Player2();
 	this.stars = new StarImageSource(this.screen, 100);
 	this.layer.addSprite(new FixedSprite(new Vec2(), this.stars));
 	this.score = 0;
 	this.updateScore();
 
-	this.player2 = new Player2();
 	this.changeProb = 0;
-	this.keyIndex = 0;
-	this.pattern = 0;
+	this.spawnerProb = 0;
+	this.basePattern = 0;
 	this.bkgndColor = 'rgb(0,0,0)';
 	this.bkgndTimer = 0;
-
-	this.add(new Spawner(this, 1));
     }
     
     update() {
@@ -461,11 +469,18 @@ class Game extends GameScene {
 	this.stars.move(new Vec2(0, 2));
 	this.player2.update();
 
-	this.changeProb += Math.random()*.05;
+	this.changeProb += Math.random()*.01;
 	if (1.0 <= this.changeProb) {
 	    this.changeProb -= 1.0;
 	    this.add(new Changer(this.screen, 1+rnd(4)));
 	}
+	
+	this.spawnerProb += Math.random()*.01;
+	if (1.0 <= this.spawnerProb) {
+	    this.spawnerProb -= 1.0;
+	    this.add(new Spawner(this, 1));
+	}
+	
 	if (0 < this.bkgndTimer) {
 	    this.bkgndTimer--;
 	    if (this.bkgndTimer == 0) {
@@ -493,7 +508,7 @@ class Game extends GameScene {
     
     setPattern(pattern: number) {
 	this.player2.setNextPattern(pattern);
-	this.pattern = pattern;
+	this.basePattern = pattern;
 	switch (pattern) {
 	case 1:
 	    this.bkgndColor = 'rgb(128,0,0)';
@@ -509,5 +524,9 @@ class Game extends GameScene {
 	    break;
 	}
 	this.bkgndTimer = 10;
+    }
+
+    setKey(enemy: Enemy) {
+	this.player2.keyFunc = (() => { return rnd(10); });
     }
 }
