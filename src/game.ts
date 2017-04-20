@@ -60,32 +60,29 @@ class Explosion extends Entity {
 class Spawner extends Task {
 
     scene: Game;
-    pattern: number;
-    counter = 0;
+    nspawns: number;
+    interval: number;
+    counter: number = 0;
+    t: number = 0;
     
-    constructor(scene: Game, pattern: number) {
+    constructor(scene: Game, nspawns: number, interval: number) {
 	super();
 	this.scene = scene;
-	this.pattern = pattern;
-	this.lifetime = 2.0;
-	switch (this.pattern) {
-	case 1:
-	    break;
-	}
+	this.nspawns = nspawns;
+	this.interval = interval;
     }
 
     update() {
-	switch (this.pattern) {
-	case 1:
-	    if (this.counter % 8 == 0) {
-		var frame = this.scene.screen;
-		var y = frame.y + triangle(200, this.counter)+20;
-		var pos = new Vec2(frame.x, y);
-		this.scene.add(new Enemy(this, pos, frame, 2, new Vec2(+4, 0)));
+	if (this.t % this.interval == 0) {
+	    this.spawn(this.counter++);
+	    if (this.nspawns <= this.counter) {
+		this.stop();
 	    }
-	    break;
 	}
-	this.counter++;
+	this.t++;
+    }
+
+    spawn(i: number) {
     }
 }
 
@@ -96,68 +93,25 @@ class Enemy extends Entity {
 
     spawner: Spawner;
     frame: Rect;
-    pattern: number;
     movement: Vec2;
-    turned = false;
 
-    constructor(spawner: Spawner, pos: Vec2, frame: Rect,
-		pattern: number, movement: Vec2=null) {
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
 	super(pos);
 	this.spawner = spawner;
 	this.frame = frame;
-	this.pattern = pattern;
-	this.movement = movement;
-	this.sprite.imgsrc = SPRITES.get(1, 0);
-	this.collider = this.sprite.getBounds(new Vec2());
+	this.movement = movement.copy();
+    }
+    
+    inFrame() {
+	return this.getCollider().overlaps(this.frame);
     }
 
     update() {
 	super.update();
-	switch (this.pattern) {
-	case 1:			// straight
-	    this.movePos(this.movement);
-	    if (this.frameOut()) {
-		this.stop();
-	    }
-	    break;
-	    
-	case 2:			// turning
-	    this.movePos(this.movement);
-	    if (this.frameOut()) {
-		if (this.turned) {
-		    this.stop();
-		} else {
-		    this.turned = true;
-		    this.movement = this.movement.scale(-1);
-		}
-	    }
-	    break;
-	    
-	case 3:			// waving
-	    this.movePos(this.movement);
-	    if (this.frameOutH()) {
-		this.stop();
-	    } else if (this.frameOutV()) {
-		this.movement.y = -this.movement.y;
-	    }
-	    break;
+	this.movePos(this.movement);
+	if (!this.inFrame()) {
+	    this.stop();
 	}
-    }
-
-    frameOut() {
-	return !this.getCollider().overlaps(this.frame);
-    }
-    
-    frameOutH() {
-	let bounds = this.getCollider().getAABB();
-	return (bounds.right() <= this.frame.x ||
-		this.frame.right() < bounds.x);
-    }
-    
-    frameOutV() {
-	let bounds = this.getCollider().getAABB();
-	return (bounds.bottom() <= this.frame.y ||
-		this.frame.bottom() < bounds.y);
     }
     
     collidedWith(entity: Entity) {
@@ -170,13 +124,176 @@ class Enemy extends Entity {
 }
 
 
+//  Type 1
+//
+class Spawner1 extends Spawner {
+
+    movement: Vec2;
+    
+    constructor(scene: Game) {
+	super(scene, 9, 4);
+	this.movement = new Vec2(0, rnd(2)? +4 : -4);
+    }
+    
+    spawn(i: number) {
+	let frame = this.scene.screen;
+	let pos = new Vec2(i*32+16, (0 < this.movement.y)? frame.y : frame.bottom());
+	this.scene.add(new Enemy1(this, pos, frame, this.movement));
+    }
+}
+
+class Enemy1 extends Enemy {
+    
+    turny: number;
+    
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
+	super(spawner, pos, frame, movement);
+	this.sprite.imgsrc = SPRITES.get(1, 0);
+	this.collider = this.sprite.getBounds(new Vec2());
+	this.turny = rnd(frame.y+32, frame.bottom()-32);
+    }
+
+    update() {
+	super.update();
+	if (0 < this.turny) {
+	    if ((0 < this.movement.y && this.turny < this.pos.y) ||
+		(this.movement.y < 0 && this.pos.y < this.turny)) {
+		this.movement.y = -this.movement.y;
+		this.turny = 0;
+	    }
+	}
+    }
+}
+
+
+//  Type 2
+//
+class Spawner2 extends Spawner {
+
+    pos: Vec2;
+    movement: Vec2;
+    
+    constructor(scene: Game) {
+	super(scene, rnd(5, 15), 10);
+	let frame = this.scene.screen;
+	this.movement = new Vec2(rnd(2)? +2 : -2, rnd(2)? +3 : -3);
+	this.pos = new Vec2(
+	    (0 < this.movement.x)? frame.x : frame.right(),
+	    rnd(frame.y+32, frame.bottom()-32));
+    }
+    
+    spawn(i: number) {
+	let frame = this.scene.screen;
+	frame = new Rect(frame.x, frame.y+32, frame.width, frame.height-64);
+	this.scene.add(new Enemy2(this, this.pos, frame, this.movement));
+    }
+}
+
+class Enemy2 extends Enemy {
+    
+    movement: Vec2;
+    
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
+	super(spawner, pos, frame, movement);
+	this.sprite.imgsrc = SPRITES.get(2, 0);
+	this.sprite.scale.x = -sign(movement.x);
+	this.collider = this.sprite.getBounds(new Vec2());
+    }
+    
+    update() {
+	super.update();
+	if ((this.movement.y < 0 && this.pos.y < this.frame.y) ||
+	    (0 < this.movement.y && this.frame.bottom() < this.pos.y)){
+	    this.movement.y = -this.movement.y;
+	}
+    }
+}
+
+
+//  Type 3
+//
+class Spawner3 extends Spawner {
+
+    movement: Vec2;
+    
+    constructor(scene: Game) {
+	super(scene, rnd(1,10), 5+rnd(10));
+	this.movement = new Vec2(rnd(2)? +4 : -4, +4);
+    }
+    
+    spawn(i: number) {
+	let frame = this.scene.screen;
+	let n = rnd(frame.width+frame.height);
+	let pos: Vec2;
+	if (0 < this.movement.x) {
+	    pos = (n < frame.width)?
+		new Vec2(n/2, 0) :
+		new Vec2(0, (n-frame.width)/2);
+	} else {
+	    pos = (n < frame.width)?
+		new Vec2(frame.width-n/2, 0) :
+		new Vec2(frame.width, (n-frame.width)/2);
+	}
+	this.scene.add(new Enemy3(this, pos, frame, this.movement));
+    }
+}
+
+class Enemy3 extends Enemy {
+    
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
+	super(spawner, pos, frame, movement);
+	this.sprite.imgsrc = SPRITES.get(3, 0);
+	this.collider = this.sprite.getBounds(new Vec2());
+    }
+}
+
+
+//  Type 4
+// 
+class Spawner4 extends Spawner {
+
+    movement: Vec2;
+    
+    constructor(scene: Game) {
+	super(scene, 5, 20);
+	this.movement = new Vec2(rnd(2)? +4 : -4, 0);
+    }
+    
+    spawn(i: number) {
+	let frame = this.scene.screen;
+	let pos = new Vec2(
+	    (0 < this.movement.x)? frame.x : frame.right(),
+	    rnd(frame.y+32, frame.bottom()-32));
+	this.scene.add(new Enemy4(this, pos, frame, this.movement));
+    }
+}
+
+class Enemy4 extends Enemy {
+    
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
+	super(spawner, pos, frame, movement);
+	this.sprite.imgsrc = SPRITES.get(4, 0);
+	this.collider = this.sprite.getBounds(new Vec2());
+    }
+    
+    update() {
+	super.update();
+	let cx = this.frame.centerx();
+	if ((this.movement.x < 0 && this.pos.x < cx-32) ||
+	    (0 < this.movement.x && cx+32 < this.pos.x)) {
+	    this.movement.x = -this.movement.x;
+	}
+    }
+}
+
+
 //  Player
 //
 class Player extends Entity {
 
     scene: Game;
     usermove: Vec2 = new Vec2();
-    firing: number = 0;
+    firing: boolean = false;
     nextfire: number = 0;
 
     constructor(scene: Game, pos: Vec2) {
@@ -189,29 +306,31 @@ class Player extends Entity {
     update() {
 	super.update();
 	this.moveIfPossible(this.usermove);
-	if (this.nextfire == 0) {
-	    switch (this.firing) {
-	    case 1:
-		this.fire(new Vec2(0,-1));
-		break;
-	    case 2:
-		this.fire(new Vec2(0,-1));
-		this.fire(new Vec2(0,+1));
-		break;
-	    case 3:
-		this.fire(new Vec2(-1,0));
-		this.fire(new Vec2(+1,0));
-		break;
-	    case 4:
-		this.fire(new Vec2(-1,0));
-		this.fire(new Vec2(+1,0));
-		this.fire(new Vec2(0,-1));
-		this.fire(new Vec2(0,+1));
-		break;
+	if (this.firing) {
+	    if (this.nextfire == 0) {
+		switch (this.scene.basePattern) {
+		case 1:
+		    this.fire(new Vec2(0,-1));
+		    break;
+		case 2:
+		    this.fire(new Vec2(0,-1));
+		    this.fire(new Vec2(0,+1));
+		    break;
+		case 3:
+		    this.fire(new Vec2(-1,0));
+		    this.fire(new Vec2(+1,0));
+		    break;
+		case 4:
+		    this.fire(new Vec2(-1,0));
+		    this.fire(new Vec2(+1,0));
+		    this.fire(new Vec2(0,-1));
+		    this.fire(new Vec2(0,+1));
+		    break;
+		}
+		this.nextfire = 4;
 	    }
-	    this.nextfire = 4;
+	    this.nextfire--;
 	}
-	this.nextfire--;
     }
 
     fire(v: Vec2) {
@@ -222,7 +341,7 @@ class Player extends Entity {
 	this.scene.add(bullet);
     }
 
-    setFire(firing: number) {
+    setFire(firing: boolean) {
 	this.firing = firing;
 	this.nextfire = 0;
     }
@@ -426,6 +545,7 @@ class Game extends GameScene {
     spawnerProb: number;
 
     basePattern: number;
+    nextPattern: number;
     bkgndColor: string;
     bkgndTimer: number;
 
@@ -437,10 +557,10 @@ class Game extends GameScene {
     }
 
     onButtonPressed(keysym: KeySym) {
-	this.player.setFire(this.basePattern);
+	this.player.setFire(true);
     }
     onButtonReleased(keysym: KeySym) {
-	this.player.setFire(0);
+	this.player.setFire(false);
     }
     onDirChanged(v: Vec2) {
 	this.player.setMove(v);
@@ -457,9 +577,10 @@ class Game extends GameScene {
 	this.score = 0;
 	this.updateScore();
 
-	this.changeProb = 0;
+	this.changeProb = 1.0;
 	this.spawnerProb = 0;
 	this.basePattern = 0;
+	this.nextPattern = 1;
 	this.bkgndColor = 'rgb(0,0,0)';
 	this.bkgndTimer = 0;
     }
@@ -472,13 +593,29 @@ class Game extends GameScene {
 	this.changeProb += Math.random()*.01;
 	if (1.0 <= this.changeProb) {
 	    this.changeProb -= 1.0;
-	    this.add(new Changer(this.screen, 1+rnd(4)));
+	    this.add(new Changer(this.screen, this.nextPattern));
+	    this.nextPattern = 1+rnd(4);
 	}
-	
-	this.spawnerProb += Math.random()*.01;
-	if (1.0 <= this.spawnerProb) {
-	    this.spawnerProb -= 1.0;
-	    this.add(new Spawner(this, 1));
+
+	if (this.basePattern != 0) {
+	    this.spawnerProb += Math.random()*.05;
+	    if (1.0 <= this.spawnerProb) {
+		this.spawnerProb -= 1.0;
+		switch (rnd(4)) {
+		case 0:
+		    this.add(new Spawner1(this));
+		    break;
+		case 1:
+		    this.add(new Spawner2(this));
+		    break;
+		case 2:
+		    this.add(new Spawner3(this));
+		    break;
+		case 3:
+		    this.add(new Spawner4(this));
+		    break;
+		}
+	    }
 	}
 	
 	if (0 < this.bkgndTimer) {
@@ -528,5 +665,7 @@ class Game extends GameScene {
 
     setKey(enemy: Enemy) {
 	this.player2.keyFunc = (() => { return rnd(10); });
+	this.score++;
+	this.updateScore();
     }
 }
