@@ -9,6 +9,10 @@
 ///
 const TICK_LEN = 500/3;
 
+interface KeyFunc {
+    (c: number, k: number): number;
+}
+
 
 //  Initialize the resources.
 let FONT: Font;
@@ -113,12 +117,16 @@ class Enemy extends Entity {
 	    this.stop();
 	}
     }
+
+    getKeyFunc() {
+	return ((c:number, k:number) => { return -1; });
+    }
     
     collidedWith(entity: Entity) {
 	if (entity instanceof Bullet) {
 	    this.stop();
 	    this.chain(new Explosion(this.pos));
-	    this.spawner.scene.setKey(this);
+	    this.spawner.scene.setKey(this.getKeyFunc());
 	}
     }
 }
@@ -129,10 +137,16 @@ class Enemy extends Entity {
 class Spawner1 extends Spawner {
 
     movement: Vec2;
+    tones: number[];
     
     constructor(scene: Game) {
 	super(scene, 9, 4);
 	this.movement = new Vec2(0, rnd(2)? +4 : -4);
+	if (rnd(3) == 0) {
+	    this.tones = [rnd(10), rnd(10), rnd(10), rnd(10)];
+	} else {
+	    this.tones = [rnd(10), rnd(10)];
+	}
     }
     
     spawn(i: number) {
@@ -153,6 +167,13 @@ class Enemy1 extends Enemy {
 	this.turny = rnd(frame.y+32, frame.bottom()-32);
     }
 
+    getKeyFunc() {
+	let tones = (this.spawner as Spawner1).tones;
+	return ((c:number, k:number) => {
+	    return tones[c % tones.length];
+	});
+    }
+    
     update() {
 	super.update();
 	if (0 < this.turny) {
@@ -200,6 +221,12 @@ class Enemy2 extends Enemy {
 	this.collider = this.sprite.getBounds(new Vec2());
     }
     
+    getKeyFunc() {
+	return ((c:number, k:number) => {
+	    return (k < 0)? rnd(10) : clamp(0, k+rnd(3)-1, 9);
+	});
+    }
+    
     update() {
 	super.update();
 	if ((this.movement.y < 0 && this.pos.y < this.frame.y) ||
@@ -245,6 +272,10 @@ class Enemy3 extends Enemy {
 	this.sprite.imgsrc = SPRITES.get(3, 0);
 	this.collider = this.sprite.getBounds(new Vec2());
     }
+    
+    getKeyFunc() {
+	return ((c:number, k:number) => { return rnd(10); });
+    }
 }
 
 
@@ -253,6 +284,7 @@ class Enemy3 extends Enemy {
 class Spawner4 extends Spawner {
 
     movement: Vec2;
+    key: number = -1;
     
     constructor(scene: Game) {
 	super(scene, 5, 20);
@@ -264,16 +296,27 @@ class Spawner4 extends Spawner {
 	let pos = new Vec2(
 	    (0 < this.movement.x)? frame.x : frame.right(),
 	    rnd(frame.y+32, frame.bottom()-32));
-	this.scene.add(new Enemy4(this, pos, frame, this.movement));
+	if (this.key < 0 || rnd(3) == 0) {
+	    this.key = rnd(10);
+	}
+	this.scene.add(new Enemy4(this, pos, frame, this.movement, this.key));
     }
 }
 
 class Enemy4 extends Enemy {
+
+    key: number;
     
-    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2) {
+    constructor(spawner: Spawner, pos: Vec2, frame: Rect, movement: Vec2, key: number) {
 	super(spawner, pos, frame, movement);
+	this.key = key;
 	this.sprite.imgsrc = SPRITES.get(4, 0);
 	this.collider = this.sprite.getBounds(new Vec2());
+    }
+    
+    getKeyFunc() {
+	let key = this.key;
+	return ((c:number, k:number) => { return key; });
     }
     
     update() {
@@ -402,9 +445,6 @@ class Changer extends Projectile {
 
 //  Player2
 //
-interface KeyFunc {
-    (c: number): number;
-}
 class Player2 {
 
     curTime: number;
@@ -421,6 +461,7 @@ class Player2 {
     
     keyCount: number = 0;
     keyFunc: KeyFunc = null;
+    curKey: number = -1;
 
     curPattern: number;
     nextPattern: number;
@@ -517,9 +558,12 @@ class Player2 {
 		this.keyCount = 0;
 	    }
 	    if (this.keyFunc !== null) {
-		let key = this.keyFunc(this.keyCount++);
+		let key = this.keyFunc(this.keyCount, this.curKey);
+		log("keyFunc("+this.keyCount+", "+this.curKey+") = "+key);
 		this.keyFunc = null;
 		if (this.curTone !== null && 0 <= key) {
+		    this.keyCount++;
+		    this.curKey = key;
 		    this.curTone.currentTime = (this.toneDuration*key)/1000 + MP3_GAP;
 		    this.curTone.play();
 		    this.keyChanged.fire(key);
@@ -601,7 +645,8 @@ class Game extends GameScene {
 	    this.spawnerProb += Math.random()*.05;
 	    if (1.0 <= this.spawnerProb) {
 		this.spawnerProb -= 1.0;
-		switch (rnd(4)) {
+		let pattern = rnd(4);
+		switch (pattern) {
 		case 0:
 		    this.add(new Spawner1(this));
 		    break;
@@ -663,8 +708,8 @@ class Game extends GameScene {
 	this.bkgndTimer = 10;
     }
 
-    setKey(enemy: Enemy) {
-	this.player2.keyFunc = (() => { return rnd(10); });
+    setKey(keyFunc: KeyFunc) {
+	this.player2.keyFunc = keyFunc;
 	this.score++;
 	this.updateScore();
     }
