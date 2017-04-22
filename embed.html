@@ -3,6 +3,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Well Played - MiniLD 73</title>
 <style>
 canvas {
@@ -11,19 +12,10 @@ canvas {
  image-rendering: crisp-edges;
  image-rendering: pixelated;
 }
-#game { margin: 1em; }
 </style>
 <script language="javascript" src="js/game.js"></script>
-<body bgcolor="black" text="white" link="cyan" onload="main(Game);">
-<h1 align=center>Well Played</h1>
-<div style="margin: 1em;" align=center>
-  <p> <strong>MiniLD 73 - "Music"</strong>
-  <p> This is not a game. This is a music generator. <br>
-    (If the sound is poor, try switching the browser)
-  <div id="game" style="position: relative; width: 640px; height: 480px;"></div>
-  <p> <u>How to Play</u>:<br>
-    Get a powerup. Arrow keys to move. Space key to fire. 
-</div>
+<body style="width:100%; height:100%; margin:0; padding:0;" onload="main(Game);">
+<div id="game" style="position: absolute; width:100%; height:100%; margin:0; padding:0;"></div>
 <div style="display:none;">
   <img id="font" src="assets/font.png">
   <img id="sprites" src="assets/sprites.png">
